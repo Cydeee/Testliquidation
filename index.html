@@ -22,7 +22,7 @@
     import { connectAndBuffer, aggregateLiquidations } from './liquidation.js';
 
     // Start receiving live liquidation events
-    connectAndBuffer();
+    const ws = connectAndBuffer();
 
     // Update the log every 10 s with the last 1 minute of liquidations
     setInterval(() => {
