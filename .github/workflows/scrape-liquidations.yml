@@ -3,10 +3,10 @@ name: Scrape CoinGlass Total Liquidations
 
 on:
   push:
-    branches: [ main ]                   # triggers on pushes to main :contentReference[oaicite:1]{index=1}
-  workflow_dispatch:                     # allows manual runs via the UI :contentReference[oaicite:2]{index=2}
+    branches: [ main ]
+  workflow_dispatch:
   schedule:
-    - cron: '*/15 * * * *'               # every 15 minutes UTC :contentReference[oaicite:3]{index=3}
+    - cron: '*/15 * * * *'   # every 15 minutes UTC
 
 permissions:
   contents: write
@@ -17,7 +17,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false     # so pushes use the bot token :contentReference[oaicite:4]{index=4}
+          persist-credentials: false
 
       - name: Setup Node.js
         uses: actions/setup-node@v3
@@ -25,11 +25,10 @@ jobs:
           node-version: '18'
 
       - name: Install dependencies
-        run: npm install puppeteer       # Puppeteer for headless scraping :contentReference[oaicite:5]{index=5}
+        run: npm ci           # reads package.json & installs puppeteer
 
       - name: Run scraper
-        run: node scrape.js
-        continue-on-error: true           # log errors but don’t block future runs
+        run: npm run scrape
 
       - name: Commit results
         run: |
