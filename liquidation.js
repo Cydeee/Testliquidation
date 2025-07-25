@@ -17,6 +17,20 @@ let events = [];
 // Expose buffer for debugging in console
 window._liqEvents = events;
 
+// Seed a dummy event immediately so your UI shows values at launch
+(() => {
+  const now = Date.now();
+  const dummy = {
+    ts: now,
+    side: 'Sell',
+    size: 0.05,
+    price: 35000,
+    usdSize: 0.05 * 35000
+  };
+  events.push(dummy);
+  console.log('[liquidation.js] Seeded dummy event', dummy);
+})();
+
 /**
  * Connects to Bybit WS and buffers every liquidation event.
  * Logs connection and errors.
@@ -34,9 +48,7 @@ export function connectAndBuffer() {
   };
 
   ws.onmessage = (msg) => {
-    // Log raw payload for debugging (remove in production)
     console.log('[liquidation.js] raw payload:', msg.data);
-
     try {
       const raw = JSON.parse(msg.data);
       const data = raw?.result?.data?.[0];
@@ -44,11 +56,8 @@ export function connectAndBuffer() {
         console.warn('[liquidation.js] no data field in payload', raw);
         return;
       }
-
       const { ts, S: side, v: size, p: price } = data;
-      const usdSize = size * price; // USD value of the liquidation
-
-      // Append to buffer
+      const usdSize = size * price;
       events.push({ ts, side, size, price, usdSize });
 
       // Prune old events beyond our max window
@@ -66,8 +75,8 @@ export function connectAndBuffer() {
 
 /**
  * Aggregates buffered events between fromTs (inclusive) and toTs (exclusive).
- * @param {number} fromTs — timestamp in ms (inclusive)
- * @param {number} toTs — timestamp in ms (exclusive)
+ * @param {number} fromTs — timestamp in ms
+ * @param {number} toTs — timestamp in ms
  * @returns {{ totalUsd: number, longUsd: number, shortUsd: number, count: number }}
  */
 export function aggregateLiquidations(fromTs, toTs) {
