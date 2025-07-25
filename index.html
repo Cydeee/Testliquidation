@@ -2,31 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Live Liquidations (All Pairs)</title>
+  <title>Live ForceOrder (All Pairs)</title>
   <style>
-    body {
-      font-family: sans-serif;
-      padding: 1rem;
-    }
-    table {
-      border-collapse: collapse;
-      width: 100%;
-      margin-top: 1rem;
-    }
-    th, td {
-      padding: 0.5rem;
-      border: 1px solid #ccc;
-      text-align: center;
-    }
-    thead {
-      background: #f0f0f0;
-    }
-    tbody tr:nth-child(even) {
-      background: #fafafa;
-    }
-    #status {
-      font-weight: bold;
-    }
+    body { font-family: sans-serif; padding: 1rem; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    th, td { padding: 0.5rem; border: 1px solid #ccc; text-align: center; }
+    thead { background: #f0f0f0; }
+    tbody tr:nth-child(even) { background: #fafafa; }
+    #status { font-weight: bold; }
   </style>
 </head>
 <body>
@@ -49,9 +32,8 @@
   <script type="module">
     const STATUS = document.getElementById('status');
     const TBL_BODY = document.querySelector('#liq-table tbody');
-    const MAX_ROWS = 100;  // keep last 100 events
+    const MAX_ROWS = 100;
 
-    // Combined forceOrder stream for all symbols
     const WS_URL = 'wss://fstream.binance.com/stream?streams=!forceOrder@arr';
     const ws = new WebSocket(WS_URL);
 
@@ -59,37 +41,37 @@
       STATUS.textContent = 'WebSocket open — awaiting events…';
       console.log('WS open:', WS_URL);
     };
-
-    ws.onerror = (err) => {
+    ws.onerror = err => {
       STATUS.textContent = 'WebSocket error';
       console.error('WS error:', err);
     };
 
     ws.onmessage = ({ data }) => {
-      // Data shape: { stream, data: [ {E, o:{s,S,origQty,p,…}}, … ] }
+      // Parse the incoming frame
       let msg;
-      try {
-        msg = JSON.parse(data);
-      } catch (e) {
-        console.error('Malformed JSON:', e, data);
+      try { msg = JSON.parse(data); }
+      catch (e) {
+        console.error('Malformed JSON', e, data);
         return;
       }
-      if (!Array.isArray(msg.data)) return;
+      // `msg.data` may be a single object or an array
+      let entries = Array.isArray(msg.data) ? msg.data : [msg.data];
 
-      // For each forced‑liquidation event in this second
-      for (const entry of msg.data) {
-        const e = entry.o;               // order object
+      for (const entry of entries) {
+        // Only process actual forceOrder events
+        if (entry.e !== 'forceOrder' || !entry.o) continue;
+
         const time = new Date(entry.E).toLocaleTimeString();
-        const sym  = e.s;                // symbol
-        const side = e.S;                // "BUY" or "SELL"
-        const qty  = Number(e.origQty);  // quantity
-        const price= Number(e.p);        // price
+        const sym  = entry.o.s;
+        const side = entry.o.S;                 // "BUY" or "SELL"
+        const qty  = Number(entry.o.origQty);
+        const price= Number(entry.o.p);
         const usd  = (qty * price).toLocaleString(undefined, {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2
         });
 
-        // Create table row
+        // Build and prepend row
         const row = document.createElement('tr');
         row.innerHTML = `
           <td>${time}</td>
@@ -99,10 +81,9 @@
           <td>${price}</td>
           <td>${usd}</td>
         `;
-        // Prepend to keep newest on top
         TBL_BODY.prepend(row);
 
-        // Trim table to MAX_ROWS
+        // Trim excess
         if (TBL_BODY.rows.length > MAX_ROWS) {
           TBL_BODY.deleteRow(-1);
         }
