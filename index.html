@@ -2,18 +2,18 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Liquidation.js Live Test</title>
+  <title>Liquidation.js Live Test (ETHUSDT)</title>
   <style>
     body { font-family: sans-serif; padding: 1rem; }
     #log { white-space: pre-wrap; background: #f5f5f5; padding: 1rem; border-radius: 4px; }
   </style>
 </head>
 <body>
-  <h1>Bybit Liquidation.js Test</h1>
+  <h1>Bybit Liquidation.js Test (ETHUSDT)</h1>
   <p>Open your browser console to see connection logs. The box below updates every 10 seconds:</p>
   <div id="log">Waiting for data…</div>
 
-  <!-- Plain‑old script to verify HTML is loading -->
+  <!-- Verify HTML is loading -->
   <script>
     console.log('🟢 Plain script loaded — HTML is up-to-date');
   </script>
@@ -22,7 +22,7 @@
     import { connectAndBuffer, aggregateLiquidations } from './liquidation.js';
 
     // Start receiving live liquidation events
-    const ws = connectAndBuffer();
+    connectAndBuffer();
 
     // Update the log every 10 s with the last 1 minute of liquidations
     setInterval(() => {
