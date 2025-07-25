@@ -3,35 +3,48 @@ import fs from 'fs';
 import puppeteer from 'puppeteer';
 
 (async () => {
-  // 1) Launch headless Chrome
+  let data = [];
   const browser = await puppeteer.launch();
   const page    = await browser.newPage();
 
-  // 2) Go to the LiquidationData page and wait for the Total Liquidations section
-  await page.goto('https://www.coinglass.com/LiquidationData', { waitUntil: 'networkidle0' });
-  await page.waitForSelector('h2:contains("Total Liquidations")'); // ensure chart loaded :contentReference[oaicite:2]{index=2}
+  // Navigate and wait for full SPA render
+  await page.goto(
+    'https://www.coinglass.com/LiquidationData',
+    { waitUntil: 'networkidle0' }
+  ); // no background activity :contentReference[oaicite:2]{index=2}
 
-  // 3) Extract the table rows under "Total Liquidations"
-  const data = await page.evaluate(() => {
-    const rows = Array.from(document.querySelectorAll('section:has(h2:contains("Total Liquidations")) table tbody tr'));
-    return rows.map(tr => {
+  // Wait until the Total Liquidations table is present
+  await page.waitForSelector(
+    'section:has(h2:contains("Total Liquidations")) table tbody tr',
+    { timeout: 30000 }
+  ); // throws if not found in 30 s :contentReference[oaicite:3]{index=3}
+
+  // Extract all rows
+  data = await page.$$eval(
+    'section:has(h2:contains("Total Liquidations")) table tbody tr',
+    rows => rows.map(tr => {
       const cells = tr.querySelectorAll('td');
       return {
-        symbol: cells[0].innerText.trim(),
-        long1h: Number(cells[1].innerText.replace(/[^0-9.-]/g, '')),
-        short1h: Number(cells[2].innerText.replace(/[^0-9.-]/g, '')),
-        long4h: Number(cells[3].innerText.replace(/[^0-9.-]/g, '')),
-        short4h: Number(cells[4].innerText.replace(/[^0-9.-]/g, '')),
-        long12h: Number(cells[5].innerText.replace(/[^0-9.-]/g, '')),
-        short12h: Number(cells[6].innerText.replace(/[^0-9.-]/g, '')),
-        long24h: Number(cells[7].innerText.replace(/[^0-9.-]/g, '')),
-        short24h: Number(cells[8].innerText.replace(/[^0-9.-]/g, '')),
+        symbol: cells[0]?.innerText.trim(),
+        long1h: parseFloat(cells[1]?.innerText.replace(/[^0-9.-]/g, '')),
+        short1h: parseFloat(cells[2]?.innerText.replace(/[^0-9.-]/g, '')),
+        long4h: parseFloat(cells[3]?.innerText.replace(/[^0-9.-]/g, '')),
+        short4h: parseFloat(cells[4]?.innerText.replace(/[^0-9.-]/g, '')),
+        long12h: parseFloat(cells[5]?.innerText.replace(/[^0-9.-]/g, '')),
+        short12h: parseFloat(cells[6]?.innerText.replace(/[^0-9.-]/g, '')),
+        long24h: parseFloat(cells[7]?.innerText.replace(/[^0-9.-]/g, '')),
+        short24h: parseFloat(cells[8]?.innerText.replace(/[^0-9.-]/g, '')),
       };
-    });
-  });
+    })
+  );
 
-  // 4) Write to JSON
-  fs.writeFileSync('data/totalLiquidations.json', JSON.stringify(data, null, 2));
+  // Write JSON
+  fs.mkdirSync('data', { recursive: true });
+  fs.writeFileSync(
+    'data/totalLiquidations.json',
+    JSON.stringify({ timestamp: Date.now(), data }, null, 2)
+  );
+
   await browser.close();
   console.log('✅ Scraped', data.length, 'rows');
 })();
