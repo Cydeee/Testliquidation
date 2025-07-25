@@ -1,41 +1,39 @@
 // scrape.js
 const fs        = require('fs');
-const puppeteer = require('puppeteer');
+const puppeteer = require('puppeteer');  // ensure you installed "puppeteer" via `npm install puppeteer` :contentReference[oaicite:2]{index=2}
 
 (async () => {
-  // Launch headless Chrome without sandbox (required on GitHub Actions)
+  // 1) Launch headless Chrome with no-sandbox flags for GitHub runners
   const browser = await puppeteer.launch({
     args: ['--no-sandbox', '--disable-setuid-sandbox']
-  });  
+  }); // avoids "Running as root without --no-sandbox" errors :contentReference[oaicite:3]{index=3}
+
   const page = await browser.newPage();
 
-  // Navigate to the CoinGlass page and wait for the SPA to finish loading
+  // 2) Navigate to the page and wait until network is idle (SPA fully loaded)
   await page.goto('https://www.coinglass.com/LiquidationData', {
     waitUntil: 'networkidle0'
-  });  
+  }); // networkidle0 waits for no network connections for 500 ms :contentReference[oaicite:4]{index=4}
 
-  // Wait for the <h2>Total Liquidations</h2> heading via XPath in waitForSelector
-  const headerEl = await page.waitForSelector(
-    'xpath//h2[normalize-space(text())="Total Liquidations"]',
+  // 3) Wait for the "1h Long" table header via XPath in waitForSelector
+  const headerCell = await page.waitForSelector(
+    'xpath//th[contains(normalize-space(.),"1h Long")]',
     { timeout: 30000 }
-  );  
-  if (!headerEl) {
-    throw new Error('Could not find "Total Liquidations" header');
+  ); // use 'xpath/' prefix for Puppeteer v22+ XPath support :contentReference[oaicite:5]{index=5}
+
+  // 4) From that header cell, locate the enclosing <tbody>
+  const tbodyHandle = await headerCell.evaluateHandle(th => {
+    const tbl = th.closest('table');
+    return tbl ? tbl.querySelector('tbody') : null;
+  });
+  if (!tbodyHandle) {
+    throw new Error('Could not find the Total Liquidations <tbody>');
   }
 
-  // From that header element, find the nearest <tbody> of the table
-  const tableBodyHandle = await page.evaluateHandle(header => {
-    const section = header.closest('section');
-    return section?.querySelector('table tbody');
-  }, headerEl);
-  if (!tableBodyHandle) {
-    throw new Error('Could not find the Total Liquidations table body');
-  }
-
-  // Extract each <tr> into a JS object
-  const data = await tableBodyHandle.$$eval('tr', rows =>
+  // 5) Extract each row into a JS object
+  const data = await tbodyHandle.$$eval('tr', rows =>
     rows.map(tr => {
-      const c = tr.querySelectorAll('td');
+      const c = Array.from(tr.querySelectorAll('td'));
       return {
         symbol:    c[0]?.innerText.trim(),
         long1h:    parseFloat(c[1]?.innerText.replace(/[^0-9.-]/g, '')),
@@ -48,9 +46,9 @@ const puppeteer = require('puppeteer');
         short24h:  parseFloat(c[8]?.innerText.replace(/[^0-9.-]/g, ''))
       };
     })
-  );  
+  );
 
-  // Ensure data directory exists and write JSON
+  // 6) Write the results to data/totalLiquidations.json
   fs.mkdirSync('data', { recursive: true });
   fs.writeFileSync(
     'data/totalLiquidations.json',
