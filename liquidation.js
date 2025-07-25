@@ -1,21 +1,25 @@
 // liquidation.js
 // Fetch live liquidation events from Bybit and aggregate them over various periods.
 
+// Log as soon as the module is parsed
+console.log('🟢 liquidation.js module loaded');
+
 // Configuration
 const SYMBOL = 'BTCUSDT';
 const WS_URL = `wss://stream.bybit.com/v5/public/linear?subscribe=allLiquidation.${SYMBOL}`;
-// Keep up to 24h of events in memory
+// Keep up to 24 h of events in memory
 const MAX_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 // In‑memory buffer of events:
-// { ts: number, side: 'Buy'|'Sell', size: number, price: number }
+// { ts: number, side: 'Buy'|'Sell', size: number, price: number, usdSize: number }
 let events = [];
 
-// Expose for debugging
+// Expose buffer for debugging in console
 window._liqEvents = events;
 
 /**
  * Connects to Bybit WS and buffers every liquidation event.
+ * Logs connection and errors.
  */
 export function connectAndBuffer() {
   console.log('[liquidation.js] Connecting to Bybit WS…');
@@ -26,23 +30,31 @@ export function connectAndBuffer() {
   };
 
   ws.onerror = (err) => {
-    console.error('[liquidation.js] WebSocket error', err);
+    console.error('[liquidation.js] WS error:', err);
   };
 
   ws.onmessage = (msg) => {
-    try {
-      const payload = JSON.parse(msg.data);
-      const data = payload?.result?.data?.[0];
-      if (data) {
-        const { ts, S: side, v: size, p: price } = data;
-        const usdSize = size * price; // size in contracts × price → USD
-        events.push({ ts, side, size, price, usdSize });
+    // Log raw payload for debugging (remove in production)
+    console.log('[liquidation.js] raw payload:', msg.data);
 
-        // Prune old events beyond our max window
-        const cutoff = Date.now() - MAX_WINDOW_MS;
-        while (events.length && events[0].ts < cutoff) {
-          events.shift();
-        }
+    try {
+      const raw = JSON.parse(msg.data);
+      const data = raw?.result?.data?.[0];
+      if (!data) {
+        console.warn('[liquidation.js] no data field in payload', raw);
+        return;
+      }
+
+      const { ts, S: side, v: size, p: price } = data;
+      const usdSize = size * price; // USD value of the liquidation
+
+      // Append to buffer
+      events.push({ ts, side, size, price, usdSize });
+
+      // Prune old events beyond our max window
+      const cutoff = Date.now() - MAX_WINDOW_MS;
+      while (events.length && events[0].ts < cutoff) {
+        events.shift();
       }
     } catch (e) {
       console.error('[liquidation.js] Failed to parse message', e, msg.data);
@@ -53,9 +65,9 @@ export function connectAndBuffer() {
 }
 
 /**
- * Aggregates buffered events between fromTs and toTs.
- * @param {number} fromTs — timestamp ms inclusive
- * @param {number} toTs — timestamp ms exclusive
+ * Aggregates buffered events between fromTs (inclusive) and toTs (exclusive).
+ * @param {number} fromTs — timestamp in ms (inclusive)
+ * @param {number} toTs — timestamp in ms (exclusive)
  * @returns {{ totalUsd: number, longUsd: number, shortUsd: number, count: number }}
  */
 export function aggregateLiquidations(fromTs, toTs) {
