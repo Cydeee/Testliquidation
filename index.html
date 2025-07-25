@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Live ForceOrder (All Pairs)</title>
+  <title>Live Forced‑Liquidations (All Pairs)</title>
   <style>
     body { font-family: sans-serif; padding: 1rem; }
     table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
@@ -47,31 +47,29 @@
     };
 
     ws.onmessage = ({ data }) => {
-      // Parse the incoming frame
       let msg;
       try { msg = JSON.parse(data); }
       catch (e) {
         console.error('Malformed JSON', e, data);
         return;
       }
-      // `msg.data` may be a single object or an array
-      let entries = Array.isArray(msg.data) ? msg.data : [msg.data];
+      const entries = Array.isArray(msg.data) ? msg.data : [msg.data];
 
       for (const entry of entries) {
-        // Only process actual forceOrder events
+        // Only process genuine forceOrder events
         if (entry.e !== 'forceOrder' || !entry.o) continue;
 
+        // Correct field for quantity is `o.q`, not `o.origQty`
         const time = new Date(entry.E).toLocaleTimeString();
         const sym  = entry.o.s;
-        const side = entry.o.S;                 // "BUY" or "SELL"
-        const qty  = Number(entry.o.origQty);
+        const side = entry.o.S;                  // "BUY" or "SELL"
+        const qty  = Number(entry.o.q);          // <-- UPDATED
         const price= Number(entry.o.p);
         const usd  = (qty * price).toLocaleString(undefined, {
           minimumFractionDigits: 2,
           maximumFractionDigits: 2
         });
 
-        // Build and prepend row
         const row = document.createElement('tr');
         row.innerHTML = `
           <td>${time}</td>
@@ -83,7 +81,6 @@
         `;
         TBL_BODY.prepend(row);
 
-        // Trim excess
         if (TBL_BODY.rows.length > MAX_ROWS) {
           TBL_BODY.deleteRow(-1);
         }
