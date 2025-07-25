@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Liquidation.js Live Test</title>
+  <style>
+    body { font-family: sans-serif; padding: 1rem; }
+    #log { white-space: pre-wrap; background: #f5f5f5; padding: 1rem; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>Bybit Liquidation.js Test</h1>
+  <p>Open your browser console to see connection logs. The box below updates every 10 seconds:</p>
+  <div id="log">Waiting for data…</div>
+
+  <script type="module">
+    import { connectAndBuffer, aggregateLiquidations } from './liquidation.js';
+
+    // Start receiving live liquidation events
+    connectAndBuffer();
+
+    // Update the log every 10 s with the last 1 minute of liquidations
+    setInterval(() => {
+      const now = Date.now();
+      const oneMinAgo = now - 60 * 1000;
+      const { totalUsd, longUsd, shortUsd, count } = aggregateLiquidations(oneMinAgo, now);
+      document.getElementById('log').textContent =
+        `Last 1 min:\n` +
+        ` • Events: ${count}\n` +
+        ` • Total USD: $${totalUsd.toLocaleString()}\n` +
+        ` • Longs liquidated: $${longUsd.toLocaleString()}\n` +
+        ` • Shorts liquidated: $${shortUsd.toLocaleString()}`;
+    }, 10_000);
+  </script>
+</body>
+</html>
