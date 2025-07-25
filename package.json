@@ -1,0 +1,12 @@
+{
+  "name": "test-liquidation-scraper",
+  "version": "1.0.0",
+  "description": "Puppeteer scraper for CoinGlass Total Liquidations",
+  "type": "commonjs",
+  "scripts": {
+    "scrape": "node scrape.js"
+  },
+  "dependencies": {
+    "puppeteer": "^21.0.0"
+  }
+}
