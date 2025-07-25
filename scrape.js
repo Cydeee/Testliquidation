@@ -1,30 +1,27 @@
-// scrape.js
-import fs from 'fs';
-import puppeteer from 'puppeteer';
+// scrape.js (CommonJS)
+const fs = require('fs');
+const puppeteer = require('puppeteer');
 
 (async () => {
   let data = [];
-  const browser = await puppeteer.launch();               // launch headless Chrome :contentReference[oaicite:8]{index=8}
+  const browser = await puppeteer.launch();
   const page    = await browser.newPage();
 
-  // Navigate and wait for full SPA render
   await page.goto('https://www.coinglass.com/LiquidationData', {
-    waitUntil: 'networkidle0'                              // wait for no network activity :contentReference[oaicite:9]{index=9}
+    waitUntil: 'networkidle0'
   });
 
-  // Wait for the Total Liquidations table rows to appear
   await page.waitForSelector(
     'section:has(h2:contains("Total Liquidations")) table tbody tr',
-    { timeout: 30000 }                                     // 30 s timeout :contentReference[oaicite:10]{index=10}
+    { timeout: 30000 }
   );
 
-  // Scrape each row into an object
   data = await page.$$eval(
     'section:has(h2:contains("Total Liquidations")) table tbody tr',
     rows => rows.map(tr => {
       const cells = tr.querySelectorAll('td');
       return {
-        symbol: cells[0]?.innerText.trim(),
+        symbol:  cells[0]?.innerText.trim(),
         long1h:  parseFloat(cells[1]?.innerText.replace(/[^0-9.-]/g, '')),
         short1h: parseFloat(cells[2]?.innerText.replace(/[^0-9.-]/g, '')),
         long4h:  parseFloat(cells[3]?.innerText.replace(/[^0-9.-]/g, '')),
@@ -37,7 +34,6 @@ import puppeteer from 'puppeteer';
     })
   );
 
-  // Ensure data directory and write JSON
   fs.mkdirSync('data', { recursive: true });
   fs.writeFileSync(
     'data/totalLiquidations.json',
