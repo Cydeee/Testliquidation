@@ -2,38 +2,81 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Liquidation.js Live Test (ETHUSDT)</title>
+  <title>Binance ForceOrder Test (ETHUSDT)</title>
   <style>
     body { font-family: sans-serif; padding: 1rem; }
     #log { white-space: pre-wrap; background: #f5f5f5; padding: 1rem; border-radius: 4px; }
   </style>
 </head>
 <body>
-  <h1>Bybit Liquidation.js Test (ETHUSDT)</h1>
-  <p>Open your browser console to see live liquidation messages.</p>
+  <h1>Binance ForceOrder.js Test (ETHUSDT)</h1>
+  <p>Open your console to see connection logs. The box below updates every 10 seconds:</p>
   <div id="log">Waiting for data…</div>
 
+  <!-- Verify HTML is up-to-date -->
   <script>
-    console.log('🟢 Plain script loaded — HTML is up-to-date');
+    console.log('🟢 HTML loaded');
   </script>
 
   <script type="module">
-    import { connectAndBuffer, aggregateLiquidations } from './liquidation.js';
+    // Buffer for incoming events
+    const events = [];
+    window._liqEvents = events;
 
-    connectAndBuffer();  // start WS
+    // Configuration: symbol and WS URL (lowercase per docs) :contentReference[oaicite:3]{index=3}
+    const SYMBOL = 'ethusdt';
+    const WS_URL = `wss://fstream.binance.com/ws/${SYMBOL}@forceOrder`;
 
+    console.log('🟢 Connecting to', WS_URL);
+    const ws = new WebSocket(WS_URL);
+
+    ws.onopen = () => console.log('🟢 WebSocket open');
+    ws.onerror  = e => console.error('❌ WS error:', e);
+
+    ws.onmessage = ({ data }) => {
+      // Raw frame includes eventType 'forceOrder' per spec :contentReference[oaicite:4]{index=4}
+      console.log('📥 raw frame:', data);
+      const msg = JSON.parse(data);
+      if (msg.e !== 'forceOrder' || msg.o?.s.toLowerCase() !== SYMBOL) return;
+
+      // Normalize fields: event time, side, qty, price
+      const ts    = msg.E;                 // server event time
+      const side  = msg.o.S;               // 'BUY' or 'SELL'
+      const size  = Number(msg.o.q);       // quantity
+      const price = Number(msg.o.p);       // price
+      const usd   = size * price;
+
+      events.push({ ts, side, size, price, usd });
+
+      // Prune anything older than 24 h
+      const cutoff = Date.now() - 24*60*60*1000;
+      while (events.length && events[0].ts < cutoff) events.shift();
+    };
+
+    // Aggregator: sum USD & count events in a window
+    function aggregate(fromMs, toMs) {
+      let total = 0, buys = 0, sells = 0, count = 0;
+      for (const e of events) {
+        if (e.ts >= fromMs && e.ts < toMs) {
+          total += e.usd;
+          e.side === 'BUY' ? buys  += e.usd
+                           : sells += e.usd;
+          count++;
+        }
+      }
+      return { total, buys, sells, count };
+    }
+
+    // UI updater every 10 s for the last 1 min
     setInterval(() => {
-      const now = Date.now();
-      const oneMinAgo = now - 60 * 1000;
-      const { totalUsd, longUsd, shortUsd, count } =
-        aggregateLiquidations(oneMinAgo, now);
-
+      const now = Date.now(), ago = now - 60*1000;
+      const { total, buys, sells, count } = aggregate(ago, now);
       document.getElementById('log').textContent =
         `Last 1 min:\n` +
         ` • Events: ${count}\n` +
-        ` • Total USD: $${totalUsd.toLocaleString()}\n` +
-        ` • Longs liquidated: $${longUsd.toLocaleString()}\n` +
-        ` • Shorts liquidated: $${shortUsd.toLocaleString()}`;
+        ` • Total USD: $${total.toLocaleString()}\n` +
+        ` • Buys liquidated: $${buys.toLocaleString()}\n` +
+        ` • Sells liquidated: $${sells.toLocaleString()}`;
     }, 10_000);
   </script>
 </body>
