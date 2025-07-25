@@ -2,90 +2,55 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Live Forced‑Liquidations (All Pairs)</title>
+  <title>Liquidation Aggregates (ETHUSDT)</title>
   <style>
     body { font-family: sans-serif; padding: 1rem; }
-    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
-    th, td { padding: 0.5rem; border: 1px solid #ccc; text-align: center; }
-    thead { background: #f0f0f0; }
-    tbody tr:nth-child(even) { background: #fafafa; }
-    #status { font-weight: bold; }
+    table { border-collapse: collapse; width: 300px; }
+    th, td { padding: 0.5rem; border: 1px solid #ccc; text-align: right; }
+    th { background: #f0f0f0; text-align: left; }
   </style>
 </head>
 <body>
-  <h1>Live Forced‑Liquidations (All Pairs)</h1>
-  <p id="status">Connecting…</p>
-  <table id="liq-table">
+  <h1>ETHUSDT Forced-Liquidation Totals</h1>
+  <table>
     <thead>
-      <tr>
-        <th>Time</th>
-        <th>Symbol</th>
-        <th>Side</th>
-        <th>Quantity</th>
-        <th>Price</th>
-        <th>USD Value</th>
-      </tr>
+      <tr><th>Window</th><th>Count</th><th>USD Volume</th></tr>
     </thead>
-    <tbody></tbody>
+    <tbody id="liq-body">
+      <tr><td colspan="3">Loading…</td></tr>
+    </tbody>
   </table>
 
   <script type="module">
-    const STATUS = document.getElementById('status');
-    const TBL_BODY = document.querySelector('#liq-table tbody');
-    const MAX_ROWS = 100;
+    import { fetchLiquidationAggregates } from './liquidation.js';
 
-    const WS_URL = 'wss://fstream.binance.com/stream?streams=!forceOrder@arr';
-    const ws = new WebSocket(WS_URL);
+    async function update() {
+      const body = document.getElementById('liq-body');
+      body.innerHTML = '<tr><td colspan="3">Loading…</td></tr>';
 
-    ws.onopen = () => {
-      STATUS.textContent = 'WebSocket open — awaiting events…';
-      console.log('WS open:', WS_URL);
-    };
-    ws.onerror = err => {
-      STATUS.textContent = 'WebSocket error';
-      console.error('WS error:', err);
-    };
+      try {
+        const data = await fetchLiquidationAggregates();
+        body.innerHTML = '';
 
-    ws.onmessage = ({ data }) => {
-      let msg;
-      try { msg = JSON.parse(data); }
-      catch (e) {
-        console.error('Malformed JSON', e, data);
-        return;
-      }
-      const entries = Array.isArray(msg.data) ? msg.data : [msg.data];
-
-      for (const entry of entries) {
-        // Only process genuine forceOrder events
-        if (entry.e !== 'forceOrder' || !entry.o) continue;
-
-        // Correct field for quantity is `o.q`, not `o.origQty`
-        const time = new Date(entry.E).toLocaleTimeString();
-        const sym  = entry.o.s;
-        const side = entry.o.S;                  // "BUY" or "SELL"
-        const qty  = Number(entry.o.q);          // <-- UPDATED
-        const price= Number(entry.o.p);
-        const usd  = (qty * price).toLocaleString(undefined, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2
-        });
-
-        const row = document.createElement('tr');
-        row.innerHTML = `
-          <td>${time}</td>
-          <td>${sym}</td>
-          <td>${side}</td>
-          <td>${qty}</td>
-          <td>${price}</td>
-          <td>${usd}</td>
-        `;
-        TBL_BODY.prepend(row);
-
-        if (TBL_BODY.rows.length > MAX_ROWS) {
-          TBL_BODY.deleteRow(-1);
+        for (const label of ['15m','1h','4h','24h']) {
+          const { count, totalUsd } = data[label] || {};
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${label}</td>
+            <td>${count != null ? count : '—'}</td>
+            <td>${totalUsd != null ? '$' + totalUsd.toLocaleString() : '—'}</td>
+          `;
+          body.appendChild(row);
         }
+      } catch (e) {
+        console.error('Fetch error:', e);
+        body.innerHTML = '<tr><td colspan="3">Error loading data</td></tr>';
       }
-    };
+    }
+
+    // Initial load + refresh every 60 s
+    update();
+    setInterval(update, 60_000);
   </script>
 </body>
 </html>
