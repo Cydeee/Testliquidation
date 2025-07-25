@@ -13,6 +13,11 @@
   <p>Open your browser console to see connection logs. The box below updates every 10 seconds:</p>
   <div id="log">Waiting for data…</div>
 
+  <!-- Plain‑old script to verify HTML is loading -->
+  <script>
+    console.log('🟢 Plain script loaded — HTML is up-to-date');
+  </script>
+
   <script type="module">
     import { connectAndBuffer, aggregateLiquidations } from './liquidation.js';
 
