@@ -1,10 +1,13 @@
 // scrape.js (CommonJS)
-const fs = require('fs');
+const fs        = require('fs');
 const puppeteer = require('puppeteer');
 
 (async () => {
   let data = [];
-  const browser = await puppeteer.launch();
+  // Launch without sandbox
+  const browser = await puppeteer.launch({
+    args: ['--no-sandbox', '--disable-setuid-sandbox']
+  });
   const page    = await browser.newPage();
 
   await page.goto('https://www.coinglass.com/LiquidationData', {
