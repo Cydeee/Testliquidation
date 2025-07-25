@@ -6,7 +6,7 @@ console.log('🟢 liquidation.js module loaded');
 
 // Configuration: switch to ETHUSDT for more frequent liquidations
 const SYMBOL = 'ETHUSDT';
-const WS_URL = `wss://stream.bybit.com/v5/public/linear?subscribe=allLiquidation.${SYMBOL}`;
+const WS_URL = 'wss://stream.bybit.com/v5/public/linear?subscribe=publicTrade.ETHUSDT';
 // Keep up to 24 h of events in memory
 const MAX_WINDOW_MS = 24 * 60 * 60 * 1000;
 
