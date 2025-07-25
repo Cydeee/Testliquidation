@@ -2,58 +2,61 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Binance ForceOrder Test (ETHUSDT)</title>
+  <title>Binance ForceOrder Combined Test</title>
   <style>
     body { font-family: sans-serif; padding: 1rem; }
     #log { white-space: pre-wrap; background: #f5f5f5; padding: 1rem; border-radius: 4px; }
   </style>
 </head>
 <body>
-  <h1>Binance ForceOrder.js Test (ETHUSDT)</h1>
-  <p>Open your console to see connection logs. The box below updates every 10 seconds:</p>
+  <h1>Binance Combined ForceOrder.js Test (ETHUSDT)</h1>
+  <p>Console → WS frames; box updates every 10 s:</p>
   <div id="log">Waiting for data…</div>
 
-  <!-- Verify HTML is up-to-date -->
   <script>
     console.log('🟢 HTML loaded');
   </script>
 
   <script type="module">
-    // Buffer for incoming events
+    // In‑page buffer
     const events = [];
     window._liqEvents = events;
 
-    // Configuration: symbol and WS URL (lowercase per docs) :contentReference[oaicite:3]{index=3}
-    const SYMBOL = 'ethusdt';
-    const WS_URL = `wss://fstream.binance.com/ws/${SYMBOL}@forceOrder`;
-
+    // Combined stream for all forced liquidations, publishes each second
+    const WS_URL = 'wss://fstream.binance.com/stream?streams=!forceOrder@arr';
     console.log('🟢 Connecting to', WS_URL);
     const ws = new WebSocket(WS_URL);
 
     ws.onopen = () => console.log('🟢 WebSocket open');
-    ws.onerror  = e => console.error('❌ WS error:', e);
+    ws.onerror = (e) => console.error('❌ WS error:', e);
 
     ws.onmessage = ({ data }) => {
-      // Raw frame includes eventType 'forceOrder' per spec :contentReference[oaicite:4]{index=4}
+      // Every second you’ll get a JSON like:
+      // { stream: "!forceOrder@arr", data: [ {...}, {...} ] }
       console.log('📥 raw frame:', data);
-      const msg = JSON.parse(data);
-      if (msg.e !== 'forceOrder' || msg.o?.s.toLowerCase() !== SYMBOL) return;
+      let msg;
+      try { msg = JSON.parse(data); }
+      catch (e) { return console.error('Malformed JSON', e, data); }
 
-      // Normalize fields: event time, side, qty, price
-      const ts    = msg.E;                 // server event time
-      const side  = msg.o.S;               // 'BUY' or 'SELL'
-      const size  = Number(msg.o.q);       // quantity
-      const price = Number(msg.o.p);       // price
-      const usd   = size * price;
+      if (!Array.isArray(msg.data)) return;
+      // Filter only for ETHUSDT entries
+      for (const entry of msg.data) {
+        // entry has shape {E, o:{s,S,q,p,origQty,...}}
+        if (entry.o.s !== 'ETHUSDT') continue;
+        const ts    = entry.E;
+        const side  = entry.o.S;               // "BUY" or "SELL"
+        const size  = Number(entry.o.origQty); // origQty = actual qty liquidated
+        const price = Number(entry.o.p);
+        const usd   = size * price;
+        events.push({ ts, side, size, price, usd });
+      }
 
-      events.push({ ts, side, size, price, usd });
-
-      // Prune anything older than 24 h
+      // Prune >24 h old
       const cutoff = Date.now() - 24*60*60*1000;
       while (events.length && events[0].ts < cutoff) events.shift();
     };
 
-    // Aggregator: sum USD & count events in a window
+    // Aggregator for UI
     function aggregate(fromMs, toMs) {
       let total = 0, buys = 0, sells = 0, count = 0;
       for (const e of events) {
@@ -67,7 +70,7 @@
       return { total, buys, sells, count };
     }
 
-    // UI updater every 10 s for the last 1 min
+    // UI refresh every 10 s
     setInterval(() => {
       const now = Date.now(), ago = now - 60*1000;
       const { total, buys, sells, count } = aggregate(ago, now);
@@ -75,8 +78,8 @@
         `Last 1 min:\n` +
         ` • Events: ${count}\n` +
         ` • Total USD: $${total.toLocaleString()}\n` +
-        ` • Buys liquidated: $${buys.toLocaleString()}\n` +
-        ` • Sells liquidated: $${sells.toLocaleString()}`;
+        ` • Buys liqui­dated: $${buys.toLocaleString()}\n` +
+        ` • Sells liqui­dated: $${sells.toLocaleString()}`;
     }, 10_000);
   </script>
 </body>
