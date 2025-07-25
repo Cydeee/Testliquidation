@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Total Liquidations</title>
+  <style>
+    body { font-family: sans-serif; padding: 1rem; }
+    .error { color: red; font-weight: bold; }
+    table { border-collapse: collapse; width: 100%; margin-top: 1rem; }
+    th, td { padding: 0.5rem; border: 1px solid #ccc; text-align: right; }
+    th { background: #f0f0f0; text-align: left; }
+  </style>
+</head>
+<body>
+  <h1>CoinGlass Total Liquidations</h1>
+  <div id="message">Loading data…</div>
+  <table id="liq-table" hidden>
+    <thead>
+      <tr>
+        <th>Symbol</th>
+        <th>1 h Long</th>
+        <th>1 h Short</th>
+        <th>4 h Long</th>
+        <th>4 h Short</th>
+        <th>12 h Long</th>
+        <th>12 h Short</th>
+        <th>24 h Long</th>
+        <th>24 h Short</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <script>
+    async function loadAndRender() {
+      const msgEl = document.getElementById('message');
+      const table = document.getElementById('liq-table');
+      const tbody = table.querySelector('tbody');
+
+      try {
+        // Fetch the JSON file without caching
+        const res = await fetch('/data/totalLiquidations.json', { cache: 'no-store' }); 
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const { timestamp, data } = await res.json();
+
+        // Update status and show table
+        msgEl.textContent = `Last updated: ${new Date(timestamp).toLocaleString()}`;
+        tbody.innerHTML = '';
+        data.forEach(item => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${item.symbol}</td>
+            <td>$${item.long1h.toLocaleString()}</td>
+            <td>$${item.short1h.toLocaleString()}</td>
+            <td>$${item.long4h.toLocaleString()}</td>
+            <td>$${item.short4h.toLocaleString()}</td>
+            <td>$${item.long12h.toLocaleString()}</td>
+            <td>$${item.short12h.toLocaleString()}</td>
+            <td>$${item.long24h.toLocaleString()}</td>
+            <td>$${item.short24h.toLocaleString()}</td>
+          `;
+          tbody.appendChild(row);
+        });
+        table.hidden = false;
+      } catch (err) {
+        // On error, hide table and show message
+        table.hidden = true;
+        msgEl.innerHTML = `<span class="error">Error loading data: ${err.message}</span>`;
+        console.error('Fetch & render error', err); 
+      }
+    }
+
+    // Initial load and then refresh every 15 minutes
+    loadAndRender();
+    setInterval(loadAndRender, 15 * 60 * 1000); 
+  </script>
+</body>
+</html>
