@@ -1,0 +1,38 @@
+name: Scrape CoinGlass Total Liquidations
+
+on:
+  schedule:
+    - cron: '*/15 * * * *'  # every 15 minutes :contentReference[oaicite:6]{index=6}
+
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install Puppeteer
+        run: npm install puppeteer
+
+      - name: Run scraper
+        run: node scrape.js
+        continue-on-error: true  # so workflow doesn’t fail completely on scraper error
+
+      - name: Commit results
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/totalLiquidations.json
+          if ! git diff --quiet; then
+            git commit -m "chore: update total liquidations"
+            git push
+          fi
