@@ -18,37 +18,36 @@ const puppeteer = require('puppeteer');
 
     console.log('⏳ Waiting for table to render…');
     await page.waitForSelector('table thead tr th', { timeout: 60000 });
-    await page.waitForSelector('table tbody tr',  { timeout: 60000 });
+    await page.waitForSelector('table tbody tr:not(.ant-table-measure-row)', { timeout: 60000 });
 
-    // 1) Dump the header texts
+    // 1) Dump the header texts for verification
     const headers = await page.$$eval(
       'table thead tr th',
       ths => ths.map(th => th.innerText.trim())
     );
     console.log('📋 Table headers:', headers);
 
-    // 2) Dump the raw HTML of the first <tr> in the body
+    // 2) Dump the raw HTML of the first real <tr>
     const firstRowHtml = await page.$eval(
-      'table tbody tr',
+      'table tbody tr:not(.ant-table-measure-row)',
       tr => tr.outerHTML
     );
     console.log('🌱 First data‑row HTML:', firstRowHtml);
 
-    // 3) Now parse all rows as before
+    // 3) Now scrape only the real rows and map correct columns
     console.log('🔍 Extracting all rows into JSON…');
-    const data = await page.$$eval('table tbody tr', rows =>
-      rows.map(tr => {
+    const data = await page.$$eval(
+      'table tbody tr:not(.ant-table-measure-row)',
+      rows => rows.map(tr => {
         const cells = Array.from(tr.querySelectorAll('td'));
         return {
-          symbol:    cells[0]?.innerText.trim(),
-          long1h:    parseFloat(cells[1]?.innerText.replace(/[^0-9.\-]/g, '')) || 0,
-          short1h:   parseFloat(cells[2]?.innerText.replace(/[^0-9.\-]/g, '')) || 0,
-          long4h:    parseFloat(cells[3]?.innerText.replace(/[^0-9.\-]/g, '')) || 0,
-          short4h:   parseFloat(cells[4]?.innerText.replace(/[^0-9.\-]/g, '')) || 0,
-          long12h:   parseFloat(cells[5]?.innerText.replace(/[^0-9.\-]/g, '')) || 0,
-          short12h:  parseFloat(cells[6]?.innerText.replace(/[^0-9.\-]/g, '')) || 0,
-          long24h:   parseFloat(cells[7]?.innerText.replace(/[^0-9.\-]/g, '')) || 0,
-          short24h:  parseFloat(cells[8]?.innerText.replace(/[^0-9.\-]/g, '')) || 0
+          symbol:    cells[1]?.innerText.trim() || '',
+          long1h:    parseFloat(cells[4]?.innerText.replace(/[^0-9.\-]/g, '')) || 0,
+          short1h:   parseFloat(cells[5]?.innerText.replace(/[^0-9.\-]/g, '')) || 0,
+          long4h:    parseFloat(cells[6]?.innerText.replace(/[^0-9.\-]/g, '')) || 0,
+          short4h:   parseFloat(cells[7]?.innerText.replace(/[^0-9.\-]/g, '')) || 0,
+          long24h:   parseFloat(cells[8]?.innerText.replace(/[^0-9.\-]/g, '')) || 0,
+          short24h:  parseFloat(cells[9]?.innerText.replace(/[^0-9.\-]/g, '')) || 0
         };
       })
     );
