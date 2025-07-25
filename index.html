@@ -1,86 +1,113 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Binance ForceOrder Combined Test</title>
+  <meta charset="UTF-8" />
+  <title>Live Liquidations (All Pairs)</title>
   <style>
-    body { font-family: sans-serif; padding: 1rem; }
-    #log { white-space: pre-wrap; background: #f5f5f5; padding: 1rem; border-radius: 4px; }
+    body {
+      font-family: sans-serif;
+      padding: 1rem;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      margin-top: 1rem;
+    }
+    th, td {
+      padding: 0.5rem;
+      border: 1px solid #ccc;
+      text-align: center;
+    }
+    thead {
+      background: #f0f0f0;
+    }
+    tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
+    #status {
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
-  <h1>Binance Combined ForceOrder.js Test (ETHUSDT)</h1>
-  <p>Console → WS frames; box updates every 10 s:</p>
-  <div id="log">Waiting for data…</div>
-
-  <script>
-    console.log('🟢 HTML loaded');
-  </script>
+  <h1>Live Forced‑Liquidations (All Pairs)</h1>
+  <p id="status">Connecting…</p>
+  <table id="liq-table">
+    <thead>
+      <tr>
+        <th>Time</th>
+        <th>Symbol</th>
+        <th>Side</th>
+        <th>Quantity</th>
+        <th>Price</th>
+        <th>USD Value</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
 
   <script type="module">
-    // In‑page buffer
-    const events = [];
-    window._liqEvents = events;
+    const STATUS = document.getElementById('status');
+    const TBL_BODY = document.querySelector('#liq-table tbody');
+    const MAX_ROWS = 100;  // keep last 100 events
 
-    // Combined stream for all forced liquidations, publishes each second
+    // Combined forceOrder stream for all symbols
     const WS_URL = 'wss://fstream.binance.com/stream?streams=!forceOrder@arr';
-    console.log('🟢 Connecting to', WS_URL);
     const ws = new WebSocket(WS_URL);
 
-    ws.onopen = () => console.log('🟢 WebSocket open');
-    ws.onerror = (e) => console.error('❌ WS error:', e);
-
-    ws.onmessage = ({ data }) => {
-      // Every second you’ll get a JSON like:
-      // { stream: "!forceOrder@arr", data: [ {...}, {...} ] }
-      console.log('📥 raw frame:', data);
-      let msg;
-      try { msg = JSON.parse(data); }
-      catch (e) { return console.error('Malformed JSON', e, data); }
-
-      if (!Array.isArray(msg.data)) return;
-      // Filter only for ETHUSDT entries
-      for (const entry of msg.data) {
-        // entry has shape {E, o:{s,S,q,p,origQty,...}}
-        if (entry.o.s !== 'ETHUSDT') continue;
-        const ts    = entry.E;
-        const side  = entry.o.S;               // "BUY" or "SELL"
-        const size  = Number(entry.o.origQty); // origQty = actual qty liquidated
-        const price = Number(entry.o.p);
-        const usd   = size * price;
-        events.push({ ts, side, size, price, usd });
-      }
-
-      // Prune >24 h old
-      const cutoff = Date.now() - 24*60*60*1000;
-      while (events.length && events[0].ts < cutoff) events.shift();
+    ws.onopen = () => {
+      STATUS.textContent = 'WebSocket open — awaiting events…';
+      console.log('WS open:', WS_URL);
     };
 
-    // Aggregator for UI
-    function aggregate(fromMs, toMs) {
-      let total = 0, buys = 0, sells = 0, count = 0;
-      for (const e of events) {
-        if (e.ts >= fromMs && e.ts < toMs) {
-          total += e.usd;
-          e.side === 'BUY' ? buys  += e.usd
-                           : sells += e.usd;
-          count++;
+    ws.onerror = (err) => {
+      STATUS.textContent = 'WebSocket error';
+      console.error('WS error:', err);
+    };
+
+    ws.onmessage = ({ data }) => {
+      // Data shape: { stream, data: [ {E, o:{s,S,origQty,p,…}}, … ] }
+      let msg;
+      try {
+        msg = JSON.parse(data);
+      } catch (e) {
+        console.error('Malformed JSON:', e, data);
+        return;
+      }
+      if (!Array.isArray(msg.data)) return;
+
+      // For each forced‑liquidation event in this second
+      for (const entry of msg.data) {
+        const e = entry.o;               // order object
+        const time = new Date(entry.E).toLocaleTimeString();
+        const sym  = e.s;                // symbol
+        const side = e.S;                // "BUY" or "SELL"
+        const qty  = Number(e.origQty);  // quantity
+        const price= Number(e.p);        // price
+        const usd  = (qty * price).toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2
+        });
+
+        // Create table row
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td>${time}</td>
+          <td>${sym}</td>
+          <td>${side}</td>
+          <td>${qty}</td>
+          <td>${price}</td>
+          <td>${usd}</td>
+        `;
+        // Prepend to keep newest on top
+        TBL_BODY.prepend(row);
+
+        // Trim table to MAX_ROWS
+        if (TBL_BODY.rows.length > MAX_ROWS) {
+          TBL_BODY.deleteRow(-1);
         }
       }
-      return { total, buys, sells, count };
-    }
-
-    // UI refresh every 10 s
-    setInterval(() => {
-      const now = Date.now(), ago = now - 60*1000;
-      const { total, buys, sells, count } = aggregate(ago, now);
-      document.getElementById('log').textContent =
-        `Last 1 min:\n` +
-        ` • Events: ${count}\n` +
-        ` • Total USD: $${total.toLocaleString()}\n` +
-        ` • Buys liqui­dated: $${buys.toLocaleString()}\n` +
-        ` • Sells liqui­dated: $${sells.toLocaleString()}`;
-    }, 10_000);
+    };
   </script>
 </body>
 </html>
