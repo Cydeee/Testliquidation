@@ -1,11 +1,11 @@
 // liquidation.js
-// Fetch live liquidation events from Bybit and aggregate them over various periods.
+// Fetch live liquidation events for ETHUSDT from Bybit and aggregate them over various periods.
 
-// Log as soon as the module is parsed
+// Log on module parse
 console.log('🟢 liquidation.js module loaded');
 
-// Configuration
-const SYMBOL = 'BTCUSDT';
+// Configuration: switch to ETHUSDT for more frequent liquidations
+const SYMBOL = 'ETHUSDT';
 const WS_URL = `wss://stream.bybit.com/v5/public/linear?subscribe=allLiquidation.${SYMBOL}`;
 // Keep up to 24 h of events in memory
 const MAX_WINDOW_MS = 24 * 60 * 60 * 1000;
@@ -17,26 +17,11 @@ let events = [];
 // Expose buffer for debugging in console
 window._liqEvents = events;
 
-// Seed a dummy event immediately so your UI shows values at launch
-(() => {
-  const now = Date.now();
-  const dummy = {
-    ts: now,
-    side: 'Sell',
-    size: 0.05,
-    price: 35000,
-    usdSize: 0.05 * 35000
-  };
-  events.push(dummy);
-  console.log('[liquidation.js] Seeded dummy event', dummy);
-})();
-
 /**
  * Connects to Bybit WS and buffers every liquidation event.
- * Logs connection and errors.
  */
 export function connectAndBuffer() {
-  console.log('[liquidation.js] Connecting to Bybit WS…');
+  console.log(`[liquidation.js] Connecting to Bybit WS for ${SYMBOL}…`);
   const ws = new WebSocket(WS_URL);
 
   ws.onopen = () => {
@@ -48,6 +33,7 @@ export function connectAndBuffer() {
   };
 
   ws.onmessage = (msg) => {
+    // Log raw payload for debugging
     console.log('[liquidation.js] raw payload:', msg.data);
     try {
       const raw = JSON.parse(msg.data);
@@ -60,7 +46,7 @@ export function connectAndBuffer() {
       const usdSize = size * price;
       events.push({ ts, side, size, price, usdSize });
 
-      // Prune old events beyond our max window
+      // Prune old events
       const cutoff = Date.now() - MAX_WINDOW_MS;
       while (events.length && events[0].ts < cutoff) {
         events.shift();
