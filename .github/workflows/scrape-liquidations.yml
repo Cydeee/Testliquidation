@@ -20,19 +20,43 @@ jobs:
         with:
           node-version: '18'
 
-      - name: Install dependencies
+      - name: Install dependencies & generate lockfile
         run: npm install
+
+      - name: Commit package-lock.json if new
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package-lock.json || true
+          if ! git diff --cached --quiet; then
+            git commit -m "chore: add package-lock.json"
+            git push
+          fi
 
       - name: Run scraper
         run: npm run scrape
         continue-on-error: true
 
-      - name: Commit and push new data
+      - name: Debug JSON output
+        run: |
+          echo "---- data folder ----"
+          ls -l data
+          echo ""
+          echo "---- head of JSON ----"
+          head -n 20 data/totalLiquidations.json || true
+          echo ""
+          echo "---- JSON line count ----"
+          wc -l data/totalLiquidations.json || true
+
+      - name: Commit scraped data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/totalLiquidations.json
-          if ! git diff --quiet; then
+          # compare staged against HEAD so deletion→addition is caught
+          if git diff --cached --quiet HEAD; then
+            echo "No changes in totalLiquidations.json – skipping commit."
+          else
             git commit -m "chore: update total liquidations"
             git push
           fi
