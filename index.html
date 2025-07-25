@@ -10,10 +10,9 @@
 </head>
 <body>
   <h1>Bybit Liquidation.js Test (ETHUSDT)</h1>
-  <p>Open your browser console to see connection logs. The box below updates every 10 seconds:</p>
+  <p>Open your browser console to see live liquidation messages.</p>
   <div id="log">Waiting for data…</div>
 
-  <!-- Verify HTML is loading -->
   <script>
     console.log('🟢 Plain script loaded — HTML is up-to-date');
   </script>
@@ -21,14 +20,14 @@
   <script type="module">
     import { connectAndBuffer, aggregateLiquidations } from './liquidation.js';
 
-    // Start receiving live liquidation events
-    connectAndBuffer();
+    connectAndBuffer();  // start WS
 
-    // Update the log every 10 s with the last 1 minute of liquidations
     setInterval(() => {
       const now = Date.now();
       const oneMinAgo = now - 60 * 1000;
-      const { totalUsd, longUsd, shortUsd, count } = aggregateLiquidations(oneMinAgo, now);
+      const { totalUsd, longUsd, shortUsd, count } =
+        aggregateLiquidations(oneMinAgo, now);
+
       document.getElementById('log').textContent =
         `Last 1 min:\n` +
         ` • Events: ${count}\n` +
